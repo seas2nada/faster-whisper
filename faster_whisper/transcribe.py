@@ -42,7 +42,8 @@ class Segment(NamedTuple):
     compression_ratio: float
     no_speech_prob: float
     words: Optional[List[Word]]
-
+    encoder_output: Optional[ctranslate2.StorageView]
+    segment_size: Optional[int]
 
 class TranscriptionOptions(NamedTuple):
     beam_size: int
@@ -222,6 +223,8 @@ class WhisperModel:
         hallucination_silence_threshold: Optional[float] = None,
         language_detection_threshold: Optional[float] = None,
         language_detection_segments: int = 1,
+        return_encoder_output: bool = False,
+        return_segment_size: bool = False,
     ) -> Tuple[Iterable[Segment], TranscriptionInfo]:
         """Transcribes an input file.
 
@@ -442,7 +445,7 @@ class WhisperModel:
             hallucination_silence_threshold=hallucination_silence_threshold,
         )
 
-        segments = self.generate_segments(features, tokenizer, options, encoder_output)
+        segments = self.generate_segments(features, tokenizer, options, encoder_output, return_encoder_output, return_segment_size)
 
         if speech_chunks:
             segments = restore_speech_timestamps(segments, speech_chunks, sampling_rate)
@@ -465,6 +468,8 @@ class WhisperModel:
         tokenizer: Tokenizer,
         options: TranscriptionOptions,
         encoder_output: Optional[ctranslate2.StorageView] = None,
+        return_encoder_output: Optional[bool] = False,
+        return_segment_size: Optional[bool] = False,
     ) -> Iterable[Segment]:
         content_frames = features.shape[-1] - self.feature_extractor.nb_max_frames
         content_duration = float(content_frames * self.feature_extractor.time_per_frame)
@@ -550,7 +555,6 @@ class WhisperModel:
 
             if seek > 0 or encoder_output is None:
                 encoder_output = self.encode(segment)
-
             (
                 result,
                 avg_logprob,
@@ -777,6 +781,8 @@ class WhisperModel:
                         if options.word_timestamps
                         else None
                     ),
+                    encoder_output=encoder_output if return_encoder_output else None,
+                    segment_size=segment_size if return_segment_size else None,
                 )
 
             if (
